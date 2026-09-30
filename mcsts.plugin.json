@@ -1,7 +1,7 @@
 {
   "id": "bedrock_link",
   "name": "基岩版身份绑定",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "apiVersion": 1,
   "mcsts": ">=2-26.3.8",
   "main": "index.ts",
@@ -80,6 +80,14 @@
       "path": "/verify",
       "auth": "hmac",
       "note": "Java 侧准入：回传 textures property，用站点 RSA 公钥验签并核对身份（验签证真实存在）",
+      "rateLimit": { "max": 60, "windowMs": 60000 }
+    },
+    {
+      "kind": "hooks",
+      "method": "POST",
+      "path": "/skin",
+      "auth": "hmac",
+      "note": "伴生插件皮肤推送取数：XUID → 绑定角色的签名 textures property（含皮肤/披风 URL）",
       "rateLimit": { "max": 60, "windowMs": 60000 }
     }
   ]

@@ -314,6 +314,30 @@ const setup: PluginSetup = async (ctx: PluginContext) => {
     }
     res.json({ ok: true, profileId: payload.profileId ?? null });
   });
+  // 皮肤推送取数：伴生插件按 XUID 拿绑定角色的签名 textures property（SKIN/CAPE URL 在其中）
+  ctx.hook({ method: 'POST', path: '/skin', auth: 'hmac' }, async (req, res) => {
+    const xuid = String(req.body['xuid'] ?? '').trim();
+    if (!XUID_PATTERN.test(xuid)) {
+      res.status(400).json({ error: 'VALIDATION_ERROR', message: 'xuid 必须是一串十进制数字' });
+      return;
+    }
+    const rows = await ctx.db.query<Row>(
+      `SELECT xuid, profile_id, profile_name, gamertag, status, bound_at FROM ${table} WHERE xuid = ${ph(0)}`,
+      [xuid],
+    );
+    const row = rows[0];
+    if (!row || String(row.status) !== 'active') {
+      res.json({ bound: false });
+      return;
+    }
+    const property = await ctx.textures.buildProperty(String(row.profile_id));
+    res.json({
+      bound: true,
+      profileId: String(row.profile_id),
+      profileName: String(row.profile_name),
+      textures: property,
+    });
+  });
 };
 
 export default setup;
