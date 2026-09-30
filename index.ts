@@ -316,6 +316,36 @@ const setup: PluginSetup = async (ctx: PluginContext) => {
   });
   // 皮肤推送取数：伴生插件按 XUID 拿绑定角色的签名 textures property（SKIN/CAPE URL 在其中）
   ctx.hook({ method: 'POST', path: '/skin', auth: 'hmac' }, async (req, res) => {
+    // 入口二：按 profileId 直取（HMAC 已证明请求方是配了密钥的服务器）——
+    // 伴生插件用它给基岩观众补 Java 站点玩家的皮肤（注入器改写 URL 后 Geyser 自己拉不到原图）
+    const wanted = String(req.body['profileId'] ?? '').trim();
+    if (wanted !== '') {
+      const dashed = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(wanted)
+        ? wanted
+        : /^[0-9a-f]{32}$/i.test(wanted)
+          ? `${wanted.slice(0, 8)}-${wanted.slice(8, 12)}-${wanted.slice(12, 16)}-${wanted.slice(16, 20)}-${wanted.slice(20)}`
+          : null;
+      if (!dashed) {
+        res.status(400).json({ error: 'VALIDATION_ERROR', message: 'profileId 必须是 UUID' });
+        return;
+      }
+      const property = await ctx.textures.buildProperty(dashed);
+      if (!property) {
+        res.json({ bound: false });
+        return;
+      }
+      let profileName = '';
+      try {
+        const payload = JSON.parse(Buffer.from(property.value, 'base64').toString('utf8')) as {
+          profileName?: string;
+        };
+        profileName = String(payload.profileName ?? '');
+      } catch {
+        /* 名字只是日志装饰，拿不到不拦 */
+      }
+      res.json({ bound: true, profileId: dashed, profileName, textures: property });
+      return;
+    }
     const xuid = String(req.body['xuid'] ?? '').trim();
     if (!XUID_PATTERN.test(xuid)) {
       res.status(400).json({ error: 'VALIDATION_ERROR', message: 'xuid 必须是一串十进制数字' });
