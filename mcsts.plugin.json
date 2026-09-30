@@ -1,7 +1,7 @@
 {
   "id": "bedrock_link",
   "name": "基岩版身份绑定",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "apiVersion": 1,
   "mcsts": ">=2-26.3.8",
   "main": "index.ts",
@@ -21,6 +21,12 @@
     }
   ],
   "settings": [
+    {
+      "key": "JOIN_ADDRESS",
+      "type": "string",
+      "label": "基岩服务器地址（展示给玩家）",
+      "hint": "如 bedrock.example.com:19132；绑定页会把「先加入这个服务器」的指引显示给玩家"
+    },
     {
       "key": "CODE_TTL_MINUTES",
       "type": "int",

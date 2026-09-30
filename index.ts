@@ -67,6 +67,7 @@ const setup: PluginSetup = async (ctx: PluginContext) => {
     // 核心已经验过 actor.profileId 属于当前登录账号，这里只按角色取数
     async list(actor: PluginBindingActor) {
       const rows = await rowsOfProfile(String(actor.profileId));
+      const joinAddress = String((await ctx.settings.get('JOIN_ADDRESS')) ?? '').trim();
       return {
         bindings: rows.map((r) => ({
           id: String(r.xuid),
@@ -77,7 +78,8 @@ const setup: PluginSetup = async (ctx: PluginContext) => {
           boundAt: String(r.bound_at),
         })),
         instructions:
-          '带着这串码进基岩服，输入 /bedrock link {{code}}；' +
+          (joinAddress ? `用基岩版加入服务器 ${joinAddress}，` : '进入基岩服务器后，') +
+          '输入 /bedrock link {{code}}；' +
           '服务器会把它实测到的 XUID 回报站点完成绑定。',
       };
     },
