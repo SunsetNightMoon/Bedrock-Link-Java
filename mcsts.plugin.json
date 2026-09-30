@@ -1,37 +1,51 @@
 {
   "id": "bedrock_link",
   "name": "基岩版身份绑定",
-  "version": "1.0.1",
+  "version": "2.0.0",
   "apiVersion": 1,
   "mcsts": ">=2-26.3.8",
   "main": "index.ts",
   "author": "SunsetNightMoon",
-  "description": "把 Xbox 基岩身份（XUID）绑到站点角色：玩家在账号设置区生成一次性码，到基岩服交给服务器侧伴生插件；伴生插件带签名回报实测 XUID 完成绑定，并可按 XUID 查询绑定角色。",
-  "binding": { "subject": "profile" },
+  "description": "把 Xbox 基岩身份（XUID）绑到站点角色的「签证」：玩家在网页提交 XUID 申请（意愿），服务器侧伴生插件在实测到该 XUID 进服的瞬间签发（微软背书的持有证明）；另保留一次性码严格模式，并提供 Java 侧外置登录验签端点。",
+  "binding": {
+    "subject": "profile",
+    "input": {
+      "label": "XUID",
+      "pattern": "^[0-9]{6,21}$",
+      "hint": "进服被拦时屏幕上会显示你的 XUID；提交后为「待确认」，实际进入基岩服务器的那一刻自动签发生效"
+    }
+  },
   "requires": [
     {
       "id": "geyser",
       "label": "GeyserMC + Floodgate",
-      "note": "基岩玩家进入 Java 服务器的前提；本插件只做身份绑定，不翻译协议"
+      "note": "基岩玩家进入 Java 服务器的前提；XUID 由 Floodgate 对 Xbox 会话实测，本插件只做身份签证，不翻译协议"
     },
     {
       "id": "server-companion",
-      "label": "服务器侧伴生插件",
-      "note": "在玩家输码时回调 /hooks/bind 提交实测 XUID，并在进服时回调 /hooks/lookup 查绑定；签名算法见 README"
+      "label": "服务器侧伴生插件（Bedrock-Link-Server）",
+      "note": "提供 /bedrock link 与进服门控：查签证 /hooks/lookup、进服签发 /hooks/confirm、码制消费 /hooks/bind、Java 验签 /hooks/verify；签名算法见 README"
     }
   ],
   "settings": [
     {
+      "key": "BIND_MODE",
+      "type": "string",
+      "label": "绑定模式",
+      "hint": "claim=申请制（默认）| code=一次性码严格模式 | both=两种都开",
+      "default": "claim"
+    },
+    {
       "key": "JOIN_ADDRESS",
       "type": "string",
       "label": "基岩服务器地址（展示给玩家）",
-      "hint": "如 bedrock.example.com:19132；绑定页会把「先加入这个服务器」的指引显示给玩家"
+      "hint": "如 bedrock.example.com:19132；绑定页会显示「用基岩版加入服务器 <地址>」"
     },
     {
       "key": "CODE_TTL_MINUTES",
       "type": "int",
       "label": "绑定码有效期（分钟）",
-      "hint": "1-60，默认 5；到期未用的码自动作废",
+      "hint": "1-60，默认 5；仅码制/both 模式使用",
       "default": 5
     }
   ],
@@ -39,17 +53,33 @@
     {
       "kind": "hooks",
       "method": "POST",
+      "path": "/lookup",
+      "auth": "hmac",
+      "note": "XUID → 签证状态（active 放行 / pending 提示可签发 / 无记录拒绝）",
+      "rateLimit": { "max": 60, "windowMs": 60000 }
+    },
+    {
+      "kind": "hooks",
+      "method": "POST",
+      "path": "/confirm",
+      "auth": "hmac",
+      "note": "伴生插件实测到该 XUID 进服 → 把待确认申请签发为生效并记录昵称（幂等）",
+      "rateLimit": { "max": 60, "windowMs": 60000 }
+    },
+    {
+      "kind": "hooks",
+      "method": "POST",
       "path": "/bind",
       "auth": "hmac",
-      "note": "服务器实测 XUID + 玩家码 → 绑定（一个 XUID 一个角色，双向唯一）",
+      "note": "码制：玩家一次性码 + 实测 XUID → 即时签发绑定",
       "rateLimit": { "max": 30, "windowMs": 60000 }
     },
     {
       "kind": "hooks",
       "method": "POST",
-      "path": "/lookup",
+      "path": "/verify",
       "auth": "hmac",
-      "note": "XUID → 绑定角色（profileId / 当前名字），供伴生插件进服时套用",
+      "note": "Java 侧准入：回传 textures property，用站点 RSA 公钥验签并核对身份（验签证真实存在）",
       "rateLimit": { "max": 60, "windowMs": 60000 }
     }
   ]

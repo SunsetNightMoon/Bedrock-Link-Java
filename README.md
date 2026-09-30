@@ -1,94 +1,67 @@
 # Bedrock-Link-Java
 
-MCSkinToServer（MCSTS）的官方插件：**基岩版身份绑定（站点侧）**。
+MCSkinToServer（MCSTS）的官方插件：**基岩版身份绑定（站点侧）v2「签证」模型**。
 
-把 Xbox 基岩身份（XUID）绑定到站点角色。玩家经 Geyser/Floodgate 进入 Java 服务器时带的是 XUID，
-绑定之后，服务器侧伴生插件就能按 XUID 查到该玩家绑定的角色，用站点身份接管进服流程。
+把 Xbox 基岩身份（XUID）签证到站点角色。玩家经 Geyser/Floodgate 进 Java 服务器时带的是 XUID
+（Floodgate 对 Xbox 会话**实测**，在线服上不可伪造——微软背书）；签证之后，服务器侧伴生插件
+按 XUID 放行该玩家，并以站点角色的身份/皮肤接管其进服体验。
 
-**本仓库只是站点侧（MCSTS 插件）。** 服务器侧伴生插件按下面的回调契约另行实现；
-本站不做协议翻译，也不假装能探测你的服务器装了什么。
+**本仓库只是站点侧（MCSTS 插件）。** 服务器侧伴生插件（Bedrock-Link-Server，jar）按下面的
+回调契约另行实现；本站不做协议翻译，也不探测你的服务器装了什么。
 
-## 绑定流程（双证据，缺一不可）
+## 签证：两条证据，各管一半
 
-```
-玩家（已登录站点）                    MCSTS                     Java 服务器（Geyser/Floodgate）
-     │  账号设置区 → 账号绑定            │                              │
-     │  选角色 → 生成绑定码 ────────────▶│  一次性码（8 位，默认 5 分钟）  │
-     │  进基岩服 /bedrock link <码> ────────────────────────────────────▶│
-     │                                  │◀── /hooks/bind  码 + 实测 XUID（带 HMAC 签名）
-     │  页面刷新看到 XUID 绑定行 ◀────────│  两条证据同时成立才写绑定        │
-```
+| 证据 | 证明什么 | 来源 |
+|---|---|---|
+| 网页提交 XUID 申请 | **意愿** —— 这个站号的主人想绑这个基岩身份 | 玩家已登录站点，在账号设置区「账号绑定」填写 |
+| 服务器实测该 XUID 进服 | **持有** —— 该 Xbox 账号此刻真的登在里面 | Floodgate 对 Xbox 会话实测，伴生插件签名回报 |
 
-- **只有码没有签名**：任何人都能自报 XUID —— 拒。
-- **只有签名没有码**：拿到服务器密钥的人可以随意给人绑定 —— 拒。
-- 绑定**存角色 UUID**，名字只是展示副本并跟随改名事件更新；角色改名不会打断绑定。
-- 一个 XUID 只绑一个角色、一个角色只绑一个 XUID；出现历史冲突一律拒绝并记日志，不自动改绑。
-- **解绑只允许玩家本人从网页侧操作**；服务器侧不许单方面解绑。
+**玩家动线（零命令）**：进服被拦 → 屏幕显示你的 XUID → 到站点粘贴提交（状态「待确认」）→
+重新进服 → 伴生插件观测到你、调 `/hooks/confirm` → 站点当场签发（记录昵称）→ 放行。
 
-## 安装（站点侧）
-
-1. 站点后端启用插件系统：环境变量 `MCSTS_PLUGINS=1`（重启后端）。
-2. 管理面板 → 插件管理 → 从 GitHub 导入：仓库 `SunsetNightMoon/Bedrock-Link-Java`，选一个 tag。
-   （或手工把本仓库整个目录放到 `data/plugins/bedrock_link/`。）
-3. 按下「启用」。
-4. 打开该插件的设置 →「服务器密钥」→ 生成，把明文密钥配到服务器侧伴生插件里。
-   明文只显示一次；换密钥 = 轮换，旧密钥的回调会立刻开始被拒。
-5. 可选设置：`JOIN_ADDRESS` 基岩服务器地址（绑定页会显示「用基岩版加入服务器 <地址>」的指引）；
-   `CODE_TTL_MINUTES` 绑定码有效期（分钟，1-60，默认 5）。
-
-装好后，玩家的账号设置区会出现「账号绑定」一块；没装任何绑定插件的站点不会看到它。
+签发后绑定行显示「XUID · 角色 · 签发时昵称」——昵称对不上说明被人抢注了申请，本人可自助解绑重申。
+要绝对严格的站点可把 `BIND_MODE` 切成 `code`（一次性码模式：网页生码 → 游戏内 `/bedrock link <码>`，
+意愿与持有在同一条命令里同时成立，无抢注窗口）。
 
 ## 服务器侧伴生插件的回调契约
 
-两个入口都挂在 `https://<你的站点>/api/plugins/bedrock_link/hooks/…`，鉴权走 MCSTS 插件系统的
-HMAC 签名（三个请求头 + 时间戳/nonce/签名）：
+入口挂在 `https://<站点>/api/plugins/bedrock_link/hooks/…`，HMAC 签名三头：
 
 ```
 签名串 = ts + "\n" + nonce + "\n" + METHOD + "\n" + 完整路径 + "\n" + sha256hex(body)
-签名   = HMAC-SHA256(服务器密钥, 签名串) 的十六进制小写
-
-X-MCSTS-Timestamp: 毫秒时间戳（与站点时钟差 ±120s 内）
-X-MCSTS-Nonce:     8-64 位 [A-Za-z0-9_-]，窗口内不可重复
-X-MCSTS-Signature: 上面的签名
+签名   = HMAC-SHA256(服务器密钥, 签名串) 十六进制小写
+X-MCSTS-Timestamp / X-MCSTS-Nonce / X-MCSTS-Signature
 ```
 
-### `POST /hooks/bind` —— 玩家输码时
+| 端点 | 请求 | 响应 |
+|---|---|---|
+| `POST /hooks/lookup` | `{xuid}` | `{bound:true, status:'active', profileId, profileName, gamertag}` / `{bound:true,status:'pending',…}` / `{bound:false,pending:false}` |
+| `POST /hooks/confirm` | `{xuid, gamertag?}` | 同上 + `justIssued`；pending→active 的签发点，幂等 |
+| `POST /hooks/bind` | `{token, xuid, gamertag?}` | 码制签发；`400` 码无效/冲突 |
+| `POST /hooks/verify` | `{name, value, signature}`（Java 玩家的 textures property 原样回传） | `{ok:true, profileId}` 或 `{ok:false, reason}` —— 站点用 RSA 私钥对应的公钥验签并核对身份 |
 
-```json
-{ "token": "AB7C9D2E", "xuid": "2535449773834232" }
-```
+进服门控建议：Floodgate 玩家 `lookup/confirm` 不为 active 就踢回（消息带其实测 XUID 与站点地址）；
+Java 玩家 `verify` 不过就踢回（离线模式下这就是「仅限外置登录玩家」的实现方式）。
 
-- `xuid` 必须取自 **Floodgate 对该连接实测的 XUID**，不是玩家自报的字符串；形态是一串十进制数字。
-- 成功：`200 { "ok": true, "profileId": "<角色 UUID>", "xuid": "…" }`。
-- `400`：码无效/过期/已用过，或与既有绑定冲突（不自动改绑，提示玩家先去站点解绑）。
-- `403`：签名校验未通过（`bad_signature` / `replayed` / `missing_header`）。
+## 安装（站点侧）
 
-### `POST /hooks/lookup` —— 伴生插件进服时查绑定
-
-```json
-{ "xuid": "2535449773834232" }
-```
-
-回 `200 { "bound": true, "profileId": "<角色 UUID>", "profileName": "<当前角色名>" }` 或
-`{ "bound": false }`。伴生插件据此决定该连接套用哪个站点角色（模式 A：服务器全程用站点内角色走
-外置登录，不碰正版账号）。皮肤渲染沿用 MCSTS 已有的 RSA 签名纹理输出，不需要另写 Geyser skin provider。
+1. 后端启用插件系统：`MCSTS_PLUGINS=1`（重启后端）。
+2. 面板 → 插件管理 → 从 GitHub 导入：`SunsetNightMoon/Bedrock-Link-Java`，选 tag。
+3. 启用 → 设置：`JOIN_ADDRESS`（基岩地址，展示给玩家）、`BIND_MODE`（默认 claim）。
+4. 「服务器密钥」生成，把明文配进伴生插件；密钥轮换旧服侧立即失效。
 
 ## 边界（请如实理解）
 
-- **本仓库 = 站点侧。** 游戏内 `/bedrock link` 命令与皮肤推送由服务器侧伴生插件提供；**该伴生插件尚未发布**，
-  在它装上之前，绑定页生成的码没有游戏内消费入口（站点侧链路已全链路实测可通）。
-- 皮肤显示分两侧：**Java 玩家看站点皮肤**走标准 textures property，没问题；**基岩客户端自己穿站点皮肤**
-  需要伴生插件经 Geyser 皮肤接口推送（会覆盖基岩客户端自带皮肤）；**披风在基岩客户端不显示**
-  （基岩版客户端没有披风支持，这是客户端限制，Java 侧玩家仍可见）。
-- 插件运行在 MCSTS 的 Node 进程内，**没有沙盒**；安装与启用是站点超级管理员的决定，行为由安装者负责。
-- 「GeyserMC + Floodgate」「服务器侧伴生插件」是 manifest 里的**声明**，MCSTS 探测不到你的服务器装了什么。
-- 绑定码是一次性的：用过、错过、过期都是同一个失败，不区分原因（否则端点会变成探测器）。
+- **本仓库 = 站点侧。** 游戏内命令与进服门控由伴生插件提供；没装它之前，申请会停在「待确认」。
+- **皮肤**：Java 侧玩家看站点皮肤走标准 textures property；**基岩客户端自己穿站点皮肤**需伴生插件
+  经 Geyser 皮肤接口推送（覆盖客户端自带皮肤）。**披风在基岩客户端不显示**（客户端限制，Java 侧可见）。
+- 申请制的抢注窗口见上表；介意就 `BIND_MODE=code`。
+- 插件运行在 MCSTS 的 Node 进程内，**没有沙盒**；安装与启用是超管的决定，行为由安装者负责。
+- 一次性码/申请的消费与签发都在数据库原子操作里完成；失败文案不区分原因，端点不可当探测器。
 
 ## 开发
 
-本仓库的 `plugin-api.d.ts` 复制自 MCSTS 仓库根；类型契约的更新以 MCSTS 的
-`PLUGIN_API_VERSION` 闸门为准。改完代码后在站点侧「重载」只重跑 `setup`，**换不掉已导入的模块**——
-改代码请重启站点进程（MCSTS 面板会把这一条标出来）。
+`plugin-api.d.ts` 复制自 MCSTS 仓库根；改代码后「重载」只重跑 setup，换不掉模块——重启站点生效。
 
 ## 许可
 

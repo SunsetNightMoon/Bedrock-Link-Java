@@ -40,12 +40,23 @@ export interface PluginEndpointSpec {
 /** ============ 通用绑定页（账号设置区）============ */
 
 /**
- * 绑定主体：
- * - `profile`：每个角色一条绑定，页面给角色选择器，核心验属后把 profileId/profileName 交给插件；
- * - `account`：整个账号一条，插件收到的 profileId 恒为 null。
+ * 绑定主体与（可选的）玩家输入声明：
+ * - `subject='profile'`：每个角色一条绑定，页面给角色选择器，核心验属后把 profileId/profileName 交给插件；
+ * - `subject='account'`：整个账号一条，插件收到的 profileId 恒为 null；
+ * - `input`：声明了才允许插件登记 `claim()` —— 绑定页会出现一个输入框（如填 XUID），
+ *   `pattern` 由**核心预校验**后才把值交给插件，插件收到的 value 一定合格式。
  */
+export interface PluginBindingInput {
+  label: string;
+  hint?: string;
+  /** 输入格式正则（如 "^[0-9]{6,21}$"）；核心在 claim 到达插件前用它挡掉不合格式的值 */
+  pattern?: string;
+  placeholder?: string;
+}
+
 export interface PluginBindingSpec {
   subject: 'account' | 'profile';
+  input?: PluginBindingInput;
 }
 
 /** 核心完成会话鉴权与角色归属校验之后交给处理器的操作者 */
@@ -70,6 +81,8 @@ export interface PluginBindingRow {
   fields: PluginBindingField[];
   /** ISO 时间，页面显示「何时绑定」 */
   boundAt?: string;
+  /** 签发态标签：pending=等待远端确认（如玩家申请后还没进过服）；不填按 active 渲染 */
+  status?: 'pending' | 'active';
 }
 
 export interface PluginBindingListResult {
@@ -85,8 +98,13 @@ export interface PluginBindingIssueResult {
   expiresAt: string;
 }
 
+export interface PluginBindingClaimResult {
+  /** 原样显示给玩家的回执文案（作者语言，框架不翻译）；不填用页面的通用成功提示 */
+  message?: string;
+}
+
 /**
- * 通用绑定页的三处理函数，经 `ctx.binding()` 登记。
+ * 通用绑定页的处理函数集合，经 `ctx.binding()` 登记。
  *
  * 页面路由（/api/plugins/<id>/binding 一族）与发现目录都由核心提供，插件只登记行为；
  * 返回值形态由核心在运行时校验 —— 契约违背会明确报错，而不是渲染出半坏页面。
@@ -96,6 +114,12 @@ export interface PluginBindingHandlers {
   issue(actor: PluginBindingActor): PluginBindingIssueResult | Promise<PluginBindingIssueResult>;
   /** 不登记则页面不提供解绑按钮（有些绑定只许管理员清） */
   revoke?(actor: PluginBindingActor & { bindingId: string }): void | Promise<void>;
+  /**
+   * 玩家提交一个值发起申请（如网页侧填 XUID）。只有 manifest 声明了 `binding.input` 才允许登记；
+   * value 已由核心按声明的 pattern 预校验。典型配对：远端服务器在**实测到该身份进服**时
+   * 经 hooks 把它确认生效（status pending → active）—— 申请是意愿，进服是持有证明。
+   */
+  claim?(actor: PluginBindingActor & { value: string }): void | PluginBindingClaimResult | Promise<void | PluginBindingClaimResult>;
 }
 
 export interface PluginManifest {
@@ -224,6 +248,12 @@ export interface PluginLogger {
 export interface PluginSite {
   siteTitle(): Promise<string>;
   publicOrigin(): Promise<string>;
+  /**
+   * 站点 Yggdrasil RSA **公钥**（PEM）。用途：伴生插件把玩家带来的 textures property
+   * 发回来验签 —— 只有本站私钥签得出的签名才过，等于「验签证是否真实存在」。
+   * 只给公钥；私钥永远不经插件 API 出手。站点尚未生成密钥时返回 null。
+   */
+  publicKeyPem(): Promise<string | null>;
 }
 
 export interface PluginContext {
