@@ -6,9 +6,11 @@ MCSkinToServer（MCSTS）的官方插件：**基岩版身份绑定（站点侧�
 （Floodgate 对 Xbox 会话**实测**，在线服上不可伪造——微软背书）；签证之后，服务器侧伴生插件
 按 XUID 放行该玩家，并以站点角色的身份/皮肤接管其进服体验。
 
-**仓库结构**：根目录 = 站点侧（MCSTS 插件 `bedrock_link`）；`server/` = 服务器侧伴生插件
-**BedrockLink**（Paper jar，git subtree 自独立开发仓并入）。jar 的构建配方、配置与边界说明见
-[`server/README.md`](server/README.md)，二进制资产挂在 GitHub Release 上。本站不做协议翻译，
+**仓库结构**：`site/` = 站点侧（MCSTS 插件 `bedrock_link`，导入时子目录填 `site`）；
+`server/` = 服务器侧伴生插件 **BedrockLink**（Paper jar，git subtree 自独立开发仓并入），
+jar 的构建配方、配置与边界说明见 [`server/README.md`](server/README.md)，二进制资产挂在
+GitHub Release 上；仓库根只留说明与识别代号标记 `.mcsts-plugin/`。这样 MCSTS 的 GitHub
+导入（只收纯文本、逐字节核对）不会扫到 `server/` 里的 jar/java 而拒装。本站不做协议翻译，
 也不探测你的服务器装了什么。
 
 ## Tag 与可用版本
@@ -17,14 +19,16 @@ MCSkinToServer（MCSTS）的官方插件：**基岩版身份绑定（站点侧�
 
 | 实际可用 | 要求 / 搭档 |
 |---|---|
-| 站点插件 `v2.2.0`（当前） | MCSTS ≥ P6 第七批（`binding.issue:false` 与 `profile.reserved`，目前仅在 Dev）；搭档 jar `server-v0.1.28` |
-| 站点插件 `v2.0.0` ~ `v2.1.1` | MCSTS ≥ P6 第五批（v2-26.4.1 / master 即可）；自带一次性码链路（`BIND_MODE`），搭档 jar `server-v0.1.27` |
+| 站点插件 `v2.2.1`（当前） | MCSTS ≥ P6 第七批（`binding.issue:false` 与 `profile.reserved`，目前仅在 Dev）；搭档 jar `server-v0.1.28`。自本版起插件住在 `site/` 子目录 |
+| 站点插件 `v2.2.0` | 同 v2.2.1，但为**仓库根目录布局**——MCSTS 第八批自动识别导入会扫到 `server/` 的 jar 而拒装，只能手工放目录装 |
+| 站点插件 `v2.0.0` ~ `v2.1.1` | MCSTS ≥ P6 第五批（v2-26.4.1 / master 即可）；自带一次性码链路（`BIND_MODE`），搭档 jar `server-v0.1.27`；同为根目录布局，同上不受自动导入待见 |
 | 伴生 jar `server-v0.1.28`（当前） | 配站点插件 ≥ v2.2.0：码制退役，`/bedrock link` 子命令移除 |
 | 伴生 jar `server-v0.1.27` | 配站点插件 v2.0.0 ~ v2.1.1（Release 挂 jar 资产） |
 
-搁置不作废、留给新插件框架改版后再跟进的：站点插件 `v1.0.0`/`v1.0.1`（一次性码模型，
-伴生端 `/bedrock link` 已退役，整链路不再可用）；jar `0.1.0`~`0.1.26` 从未打 tag，
-二进制都在 `server/dist/` 里可追溯。
+搁置不作废：站点插件 `v1.0.0`/`v1.0.1`（一次性码模型，伴生端 `/bedrock link` 已退役，
+整链路不再可用）；jar `0.1.0`~`0.1.26` 从未打 tag，二进制都在 `server/dist/` 里可追溯。
+MCSTS 导入器只认**语义化 tag**（`v*`）并自动挑最新，`server-v*` 会被当噪声过滤——
+两条线共用一个仓库也不会互相认错。
 
 ## 签证：两条证据，各管一半
 
@@ -64,7 +68,8 @@ Java 玩家 `verify` 不过就踢回（离线模式下这就是「仅限外置�
 ## 安装（站点侧）
 
 1. 后端启用插件系统：`MCSTS_PLUGINS=1`（重启后端）。
-2. 面板 → 插件管理 → 从 GitHub 导入：`SunsetNightMoon/Bedrock-Link-Java`，选 tag。
+2. 面板 → 插件管理 → 从 GitHub 导入：粘仓库地址（任何形态都行），**子目录填 `site`**，
+   版本由导入器扫 tag 自动挑最新语义化版本，无需手选。
 3. 启用 → 设置：`JOIN_ADDRESS`（基岩地址，展示给玩家）。
 4. 「服务器密钥」生成，把明文配进伴生插件；密钥轮换旧服侧立即失效。
 
@@ -81,7 +86,7 @@ Java 玩家 `verify` 不过就踢回（离线模式下这就是「仅限外置�
 
 ## 开发
 
-`plugin-api.d.ts` 复制自 MCSTS 仓库根；改代码后「重载」只重跑 setup，换不掉模块——重启站点生效。
+`site/plugin-api.d.ts` 复制自 MCSTS 仓库根；改代码后「重载」只重跑 setup，换不掉模块——重启站点生效。
 
 ## 许可
 
