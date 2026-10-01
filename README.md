@@ -6,8 +6,10 @@ MCSkinToServer（MCSTS）的官方插件：**基岩版身份绑定（站点侧�
 （Floodgate 对 Xbox 会话**实测**，在线服上不可伪造——微软背书）；签证之后，服务器侧伴生插件
 按 XUID 放行该玩家，并以站点角色的身份/皮肤接管其进服体验。
 
-**本仓库只是站点侧（MCSTS 插件）。** 服务器侧伴生插件（Bedrock-Link-Server，jar）按下面的
-回调契约另行实现；本站不做协议翻译，也不探测你的服务器装了什么。
+**仓库结构**：根目录 = 站点侧（MCSTS 插件 `bedrock_link`）；`server/` = 服务器侧伴生插件
+**BedrockLink**（Paper jar，git subtree 自独立开发仓并入）。jar 的构建配方、配置与边界说明见
+[`server/README.md`](server/README.md)，二进制资产挂在 GitHub Release 上。本站不做协议翻译，
+也不探测你的服务器装了什么。
 
 ## 签证：两条证据，各管一半
 
