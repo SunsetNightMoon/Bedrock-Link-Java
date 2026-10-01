@@ -5,7 +5,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 public final class BedrockLinkPlugin extends JavaPlugin {
     public record Settings(String siteUrl, String displayUrl, String hookKey, boolean requireBinding,
-                           boolean linkIdentity, boolean verifyJava, boolean skinPush) {}
+                           boolean linkIdentity, boolean verifyJava, boolean skinPush, String serverName) {}
 
     private volatile SiteClient site;
     private volatile Settings settings;
@@ -26,7 +26,8 @@ public final class BedrockLinkPlugin extends JavaPlugin {
         getLogger().info("已启用：site=" + settings.siteUrl()
                 + " require-binding=" + settings.requireBinding()
                 + " link-identity=" + settings.linkIdentity()
-                + " verify-java=" + settings.verifyJava());
+                + " verify-java=" + settings.verifyJava()
+                + " server-name=" + (settings.serverName().isEmpty() ? "(未填，不上报)" : settings.serverName()));
     }
 
     public void reloadSettings() {
@@ -38,7 +39,8 @@ public final class BedrockLinkPlugin extends JavaPlugin {
                 getConfig().getBoolean("require-binding", true),
                 getConfig().getBoolean("link-identity", true),
                 getConfig().getBoolean("verify-java", true),
-                getConfig().getBoolean("skin-push", true));
+                getConfig().getBoolean("skin-push", true),
+                getConfig().getString("server-name", "").trim());
         site = new SiteClient(url, key);
     }
 

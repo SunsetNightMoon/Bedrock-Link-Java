@@ -54,6 +54,9 @@ public final class LoginGate implements Listener {
             JsonObject body = new JsonObject();
             body.addProperty("xuid", xuid);
             body.addProperty("gamertag", gamertag == null ? "" : gamertag);
+            // 多互通服：上报本服名字，站点把「签发于哪个服」记进签证（v2.3.0 起可选字段）
+            String serverName = plugin.settings().serverName();
+            if (!serverName.isEmpty()) body.addProperty("server", serverName);
             r = plugin.site().post(CONFIRM, body);
         } catch (Exception err) {
             log.warning("站点不可达（" + err.getMessage() + "），require-binding 下拒绝放行 " + xuid);

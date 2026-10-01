@@ -48,10 +48,10 @@ MCSkinToServer 官方插件 **bedrock_link（基岩版身份绑定）的服务�
 
 ```
 javac --release 21 -encoding UTF-8 -nowarn \
-  -cp "paper-api.jar:Geyser-Spigot.jar:floodgate-spigot.jar:gson.jar:adventure-api.jar:adventure-key.jar:annotations.jar:bungeecord-chat.jar" \
+  -cp "paper-api.jar;Geyser-Spigot.jar;floodgate-spigot.jar;gson.jar;adventure-api.jar;adventure-key.jar;annotations.jar;bungeecord-chat.jar" \
   -d out/classes $(find src/main/java -name '*.java')
 cp -r src/main/resources/* out/classes/
-jar -cf dist/BedrockLink-0.1.27.jar -C out/classes .
+jar -cf dist/BedrockLink-0.1.29.jar -C out/classes .
 ```
 
 依赖版本与 `pom.xml` 一致（Paper 26.2 build 129 / Geyser api 2.11.3-SNAPSHOT /
