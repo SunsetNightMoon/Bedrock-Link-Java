@@ -10,11 +10,10 @@ import org.geysermc.floodgate.api.player.FloodgatePlayer;
 
 /**
  * /bedrock xuid —— 查自己的 XUID 与签证状态（基岩玩家）
- * /bedrock link <码> —— 码制绑定：把本站实测的 XUID 连同玩家码交给站点
  * /bedrock reload —— 重读配置
+ * （v0.1.28：/bedrock link 随站点 v2.2.0 移除码制一并退役）
  */
 public final class BedrockCommand implements CommandExecutor {
-    private static final String BIND = "/api/plugins/bedrock_link/hooks/bind";
     private static final String LOOKUP = "/api/plugins/bedrock_link/hooks/lookup";
 
     private final BedrockLinkPlugin plugin;
@@ -80,24 +79,7 @@ public final class BedrockCommand implements CommandExecutor {
             }
             return true;
         }
-        if (args.length >= 2 && args[0].equalsIgnoreCase("link")) {
-            try {
-                JsonObject body = new JsonObject();
-                body.addProperty("token", args[1].trim().toUpperCase());
-                body.addProperty("xuid", xuid);
-                body.addProperty("gamertag", fp.getUsername());
-                JsonObject r = plugin.site().post(BIND, body);
-                if (r.has("bound") && r.get("bound").getAsBoolean()) {
-                    player.sendMessage("§a绑定成功！重新进入服务器即生效。");
-                } else {
-                    player.sendMessage("§c" + (r.has("message") ? r.get("message").getAsString() : "绑定失败"));
-                }
-            } catch (Exception err) {
-                player.sendMessage("站点提交失败：" + err.getMessage());
-            }
-            return true;
-        }
-        sender.sendMessage("用法：/bedrock xuid | /bedrock link <码> | /bedrock reload");
+        sender.sendMessage("用法：/bedrock xuid | /bedrock reload");
         return true;
     }
 }
