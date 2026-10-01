@@ -7,7 +7,8 @@
  * - **意愿**：玩家在站点（已登录）对自己的角色提交 XUID 申请 → 状态 pending；
  * - **持有**：Floodgate 对 Xbox 会话实测的 XUID 出现在进服瞬间（在线服不可伪造），
  *   伴生插件调 /hooks/confirm → 站点把该申请签发为 active。
- * 两条齐了才生效；玩家全程零命令。码制（issue→/hooks/bind）作为严格模式保留（BIND_MODE）。
+ * 两条齐了才生效；玩家全程零命令。v2.2.0 起码制（issue→/hooks/bind）移除：
+ * XUID 申请已覆盖同一件事且更强（微软背书的持有证明），页面也不再出现生成码按钮。
  */
 import { createVerify } from 'node:crypto';
 import type {
@@ -44,15 +45,6 @@ const setup: PluginSetup = async (ctx: PluginContext) => {
      )`,
   );
 
-  const mode = async (): Promise<'claim' | 'code' | 'both'> => {
-    const raw = String((await ctx.settings.get('BIND_MODE')) ?? 'claim').trim().toLowerCase();
-    return raw === 'code' || raw === 'both' ? raw : 'claim';
-  };
-  const ttlMinutes = async (): Promise<number> => {
-    const raw = Number((await ctx.settings.get('CODE_TTL_MINUTES')) ?? 5);
-    if (!Number.isFinite(raw)) return 5;
-    return Math.min(Math.max(Math.round(raw), 1), 60);
-  };
   const rowOut = (r: Row) => ({
     bound: true,
     status: String(r.status),
@@ -71,6 +63,11 @@ const setup: PluginSetup = async (ctx: PluginContext) => {
   ctx.events.on('profile.deleted', async (payload) => {
     await ctx.db.run(`DELETE FROM ${table} WHERE profile_id = ${ph(0)}`, [payload.profileId]);
   });
+  // 角色被换下（多→单、或单模式换 ID）：绑定随之作废，XUID 释放给新的可用角色重绑。
+  // 预留角色只是名字占位，不再是可用身份 —— 留着绑定等于让一个进不了服的 ID 继续放行。
+  ctx.events.on('profile.reserved', async (payload) => {
+    await ctx.db.run(`DELETE FROM ${table} WHERE profile_id = ${ph(0)}`, [payload.profileId]);
+  });
   ctx.events.on('account.purged', async (payload) => {
     for (const profileId of payload.profileIds) {
       await ctx.db.run(`DELETE FROM ${table} WHERE profile_id = ${ph(0)}`, [profileId]);
@@ -84,7 +81,6 @@ const setup: PluginSetup = async (ctx: PluginContext) => {
         `SELECT xuid, profile_id, profile_name, gamertag, status, bound_at FROM ${table} WHERE profile_id = ${ph(0)}`,
         [actor.profileId],
       );
-      const m = await mode();
       const joinAddress = String((await ctx.settings.get('JOIN_ADDRESS')) ?? '').trim();
       const fields = (r: Row) => {
         const list = [
@@ -107,15 +103,11 @@ const setup: PluginSetup = async (ctx: PluginContext) => {
           boundAt: String(r.bound_at),
           status: (r.status === 'pending' ? 'pending' : 'active') as 'pending' | 'active',
         })),
-        instructions:
-          m === 'code'
-            ? '点「生成绑定码」，进基岩服输入 /bedrock link <码> 完成绑定。'
-            : claimHintText,
+        instructions: claimHintText,
       };
     },
 
     async claim(actor: PluginBindingActor & { value: string }) {
-      if ((await mode()) === 'code') return { message: '本站点当前只开启了一次性码模式' };
       const xuid = actor.value.trim();
       if (!XUID_PATTERN.test(xuid)) return { message: 'XUID 格式不正确' };
 
@@ -153,16 +145,6 @@ const setup: PluginSetup = async (ctx: PluginContext) => {
       }
       ctx.logger.info('收到申请（待进服签发）', { xuid, profileId: actor.profileId });
       return { message: '申请已记录：重新进入基岩服务器的那一刻自动签发生效' };
-    },
-
-    async issue(actor: PluginBindingActor) {
-      if ((await mode()) === 'claim') throw new Error('本站点当前只开启了申请制，请刷新页面使用 XUID 申请');
-      const issued = await ctx.tokens.issue({
-        subject: String(actor.profileId),
-        ttlMs: (await ttlMinutes()) * 60_000,
-        data: { by: actor.userId, profileName: actor.profileName ?? '' },
-      });
-      return { code: issued.token, expiresAt: issued.expiresAt };
     },
 
     async revoke(actor: PluginBindingActor & { bindingId: string }) {
@@ -225,59 +207,6 @@ const setup: PluginSetup = async (ctx: PluginContext) => {
       return;
     }
     res.json({ ...rowOut(row), justIssued: false });
-  });
-
-  // 码制：玩家码（意愿）+ 实测 XUID（持有）当场双证据签发
-  ctx.hook({ method: 'POST', path: '/bind', auth: 'hmac' }, async (req, res) => {
-    if ((await mode()) === 'claim') {
-      res.status(400).json({ error: 'VALIDATION_ERROR', message: '本站点未开启一次性码模式' });
-      return;
-    }
-    const token = String(req.body['token'] ?? '').trim().toUpperCase();
-    const xuid = String(req.body['xuid'] ?? '').trim();
-    const gamertag = String(req.body['gamertag'] ?? '').trim();
-    if (!XUID_PATTERN.test(xuid)) {
-      res.status(400).json({ error: 'VALIDATION_ERROR', message: 'xuid 必须是一串十进制数字（Floodgate 实测值）' });
-      return;
-    }
-    const consumed = await ctx.tokens.consume(token);
-    if (!consumed) {
-      res.status(400).json({ error: 'VALIDATION_ERROR', message: '绑定码无效、已过期或已被使用' });
-      return;
-    }
-    const profileId = consumed.subject;
-    const profileName = String(consumed.data['profileName'] ?? '');
-    const byProfile = await ctx.db.query<Row>(
-      `SELECT xuid, status FROM ${table} WHERE profile_id = ${ph(0)}`,
-      [profileId],
-    );
-    if (byProfile.length > 0 && String(byProfile[0]!['xuid']) !== xuid) {
-      ctx.logger.warn('绑定冲突：角色已绑定另一个 XUID', { profileId, old: String(byProfile[0]!['xuid']), new: xuid });
-      res.status(400).json({ error: 'VALIDATION_ERROR', message: '该角色已绑定另一个基岩身份，请先在站点解绑' });
-      return;
-    }
-    const byXuid = await ctx.db.query<Row>(
-      `SELECT profile_id, status FROM ${table} WHERE xuid = ${ph(0)}`,
-      [xuid],
-    );
-    if (byXuid.length > 0 && String(byXuid[0]!['profile_id']) !== profileId) {
-      ctx.logger.warn('绑定冲突：XUID 已绑另一个角色', { xuid, old: String(byXuid[0]!['profile_id']), new: profileId });
-      res.status(400).json({ error: 'VALIDATION_ERROR', message: '该基岩身份已绑定另一个角色，请先在站点解绑' });
-      return;
-    }
-    await ctx.db.run(
-      `INSERT INTO ${table} (xuid, profile_id, profile_name, user_id, gamertag, status, bound_at)
-       VALUES (${ph(0)}, ${ph(1)}, ${ph(2)}, ${ph(3)}, ${ph(4)}, 'active', ${ph(5)})
-       ON CONFLICT (xuid) DO UPDATE SET
-         profile_id = excluded.profile_id,
-         profile_name = excluded.profile_name,
-         gamertag = excluded.gamertag,
-         status = 'active',
-         bound_at = excluded.bound_at`,
-      [xuid, profileId, profileName, String(consumed.data['by'] ?? ''), gamertag, new Date().toISOString()],
-    );
-    ctx.logger.info('码制签发完成', { profileId, xuid });
-    res.json({ bound: true, status: 'active', profileId, profileName, xuid });
   });
 
   // Java 侧准入：验「签证是否真实存在」—— textures property 必须由本站私钥签出，且身份自洽

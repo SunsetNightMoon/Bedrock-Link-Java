@@ -57,6 +57,8 @@ export interface PluginBindingInput {
 export interface PluginBindingSpec {
   subject: 'account' | 'profile';
   input?: PluginBindingInput;
+  /** 写 false 表示不提供一次性码模式：核心不要求 issue 处理器、issue 路由回 501、目录 issuable=false（绑定页收起生成码按钮） */
+  issue?: boolean;
 }
 
 /** 核心完成会话鉴权与角色归属校验之后交给处理器的操作者 */
@@ -111,7 +113,11 @@ export interface PluginBindingClaimResult {
  */
 export interface PluginBindingHandlers {
   list(actor: PluginBindingActor): PluginBindingListResult | Promise<PluginBindingListResult>;
-  issue(actor: PluginBindingActor): PluginBindingIssueResult | Promise<PluginBindingIssueResult>;
+  /**
+   * 一次性码入口。默认必须登记；manifest 写了 `binding.issue:false` 时改为**必须不登记**
+   * （核心把 issue 路由收成 501，登记了也永远跑不到）。纯申请制插件走 issue:false + claim。
+   */
+  issue?(actor: PluginBindingActor): PluginBindingIssueResult | Promise<PluginBindingIssueResult>;
   /** 不登记则页面不提供解绑按钮（有些绑定只许管理员清） */
   revoke?(actor: PluginBindingActor & { bindingId: string }): void | Promise<void>;
   /**
@@ -222,12 +228,19 @@ export interface PluginTokens {
 export type PluginEventName =
   | 'user.registered'
   | 'profile.renamed'
+  | 'profile.reserved'
   | 'profile.deleted'
   | 'account.purged';
 
 export interface PluginEventPayloads {
   'user.registered': { userId: string; profileId: string; profileName: string };
   'profile.renamed': { userId: string; profileId: string; from: string; to: string };
+  /**
+   * 角色被换下、转为预留（多→单切换、或单模式下换 ID 换下旧角色）。
+   * 角色没删（名字占位防抢注），但它不再是该账号的可用身份 ——
+   * 把「身份 ↔ 外部账号」绑在一起的插件应据此丢弃该角色的绑定（释放对方身份供重绑）。
+   */
+  'profile.reserved': { userId: string; profileId: string; name: string };
   'profile.deleted': { userId: string; profileId: string; name: string };
   'account.purged': { userId: string; profileIds: string[] };
 }
@@ -256,6 +269,23 @@ export interface PluginSite {
   publicKeyPem(): Promise<string | null>;
 }
 
+/** 站点 Yggdrasil 签名链产出的纹理 property（与启动器 hasJoined 同一条构建链路） */
+export interface PluginTextureProperty {
+  /** base64 的 textures JSON（含 SKIN/CAPE 的 url 与 model） */
+  value: string;
+  /** RSA-SHA1 签名（base64）；站点无私钥时为 null */
+  signature: string | null;
+}
+
+/** 纹理能力：给伴生端（如基岩服务器）取「某角色当前皮肤/披风」的签名 property */
+export interface PluginTextures {
+  /**
+   * 构建指定角色当前生效素材的纹理 property；角色不存在返回 null。
+   * 被拒素材与预留角色已在仓储层排除；角色没皮肤时 value 里就没有 SKIN 项，由调用方决定回落。
+   */
+  buildProperty(profileId: string): Promise<PluginTextureProperty | null>;
+}
+
 export interface PluginContext {
   readonly pluginId: string;
   /** ctx.table('bindings') → 'plugin_<你的id>_bindings'（表名片段只允许小写下划线） */
@@ -263,6 +293,7 @@ export interface PluginContext {
   db: PluginDb;
   settings: PluginSettings;
   tokens: PluginTokens;
+  textures: PluginTextures;
   events: PluginEvents;
   site: PluginSite;
   logger: PluginLogger;

@@ -1,14 +1,15 @@
 {
   "id": "bedrock_link",
   "name": "基岩版身份绑定",
-  "version": "2.1.1",
+  "version": "2.2.0",
   "apiVersion": 1,
   "mcsts": ">=2-26.3.8",
   "main": "index.ts",
   "author": "SunsetNightMoon",
-  "description": "把 Xbox 基岩身份（XUID）绑到站点角色的「签证」：玩家在网页提交 XUID 申请（意愿），服务器侧伴生插件在实测到该 XUID 进服的瞬间签发（微软背书的持有证明）；另保留一次性码严格模式，并提供 Java 侧外置登录验签端点。",
+  "description": "把 Xbox 基岩身份（XUID）绑到站点角色的「签证」：玩家在网页提交 XUID 申请（意愿），服务器侧伴生插件在实测到该 XUID 进服的瞬间签发（微软背书的持有证明）；并提供 Java 侧外置登录验签端点。",
   "binding": {
     "subject": "profile",
+    "issue": false,
     "input": {
       "label": "XUID",
       "pattern": "^[0-9]{6,21}$",
@@ -23,30 +24,16 @@
     },
     {
       "id": "server-companion",
-      "label": "服务器侧伴生插件（Bedrock-Link-Server）",
-      "note": "提供 /bedrock link 与进服门控：查签证 /hooks/lookup、进服签发 /hooks/confirm、码制消费 /hooks/bind、Java 验签 /hooks/verify；签名算法见 README"
+      "label": "服务器侧伴生插件（BedrockLink）",
+      "note": "提供进服门控与游戏内查询：查签证 /hooks/lookup、进服签发 /hooks/confirm、Java 验签 /hooks/verify；签名算法见 README"
     }
   ],
   "settings": [
-    {
-      "key": "BIND_MODE",
-      "type": "string",
-      "label": "绑定模式",
-      "hint": "claim=申请制（默认）| code=一次性码严格模式 | both=两种都开",
-      "default": "claim"
-    },
     {
       "key": "JOIN_ADDRESS",
       "type": "string",
       "label": "基岩服务器地址（展示给玩家）",
       "hint": "如 bedrock.example.com:19132；绑定页会显示「用基岩版加入服务器 <地址>」"
-    },
-    {
-      "key": "CODE_TTL_MINUTES",
-      "type": "int",
-      "label": "绑定码有效期（分钟）",
-      "hint": "1-60，默认 5；仅码制/both 模式使用",
-      "default": 5
     }
   ],
   "endpoints": [
@@ -69,14 +56,6 @@
     {
       "kind": "hooks",
       "method": "POST",
-      "path": "/bind",
-      "auth": "hmac",
-      "note": "码制：玩家一次性码 + 实测 XUID → 即时签发绑定",
-      "rateLimit": { "max": 30, "windowMs": 60000 }
-    },
-    {
-      "kind": "hooks",
-      "method": "POST",
       "path": "/verify",
       "auth": "hmac",
       "note": "Java 侧准入：回传 textures property，用站点 RSA 公钥验签并核对身份（验签证真实存在）",
@@ -87,7 +66,7 @@
       "method": "POST",
       "path": "/skin",
       "auth": "hmac",
-      "note": "伴生插件皮肤推送取数：XUID → 绑定角色的签名 textures property（含皮肤/披风 URL）",
+      "note": "伴生插件皮肤推送取数：XUID 或 profileId → 绑定角色的签名 textures property（含皮肤/披风 URL）",
       "rateLimit": { "max": 60, "windowMs": 60000 }
     }
   ]
