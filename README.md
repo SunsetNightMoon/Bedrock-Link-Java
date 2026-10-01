@@ -19,9 +19,9 @@ GitHub Release 上；仓库根只留说明与识别代号标记 `.mcsts-plugin/`
 
 | 实际可用 | 要求 / 搭档 |
 |---|---|
-| 站点插件 `v2.2.1`（当前） | MCSTS ≥ P6 第七批（`binding.issue:false` 与 `profile.reserved`，目前仅在 Dev）；搭档 jar `server-v0.1.28`。自本版起插件住在 `site/` 子目录 |
+| 站点插件 `v2.2.2`（当前；`v2.2.1`→`v2.2.2` 仅修元数据与文档，代码相同） | MCSTS ≥ P6 第七批（`binding.issue:false` 与 `profile.reserved`，目前仅在 Dev）；搭档 jar `server-v0.1.28`。自 v2.2.1 起插件住在 `site/` 子目录 |
 | 站点插件 `v2.2.0` | 同 v2.2.1，但为**仓库根目录布局**——MCSTS 第八批自动识别导入会扫到 `server/` 的 jar 而拒装，只能手工放目录装 |
-| 站点插件 `v2.0.0` ~ `v2.1.1` | MCSTS ≥ P6 第五批（v2-26.4.1 / master 即可）；自带一次性码链路（`BIND_MODE`），搭档 jar `server-v0.1.27`；同为根目录布局，同上不受自动导入待见 |
+| 站点插件 `v2.0.0` ~ `v2.1.1` | MCSTS ≥ P6 第五批（v2-26.4.1 / master 即可）；自带一次性码链路（`BIND_MODE`），搭档 jar `server-v0.1.27`；同为根目录布局，自动导入同样装不了 |
 | 伴生 jar `server-v0.1.28`（当前） | 配站点插件 ≥ v2.2.0：码制退役，`/bedrock link` 子命令移除 |
 | 伴生 jar `server-v0.1.27` | 配站点插件 v2.0.0 ~ v2.1.1（Release 挂 jar 资产） |
 
@@ -61,6 +61,7 @@ X-MCSTS-Timestamp / X-MCSTS-Nonce / X-MCSTS-Signature
 | `POST /hooks/lookup` | `{xuid}` | `{bound:true, status:'active', profileId, profileName, gamertag}` / `{bound:true,status:'pending',…}` / `{bound:false,pending:false}` |
 | `POST /hooks/confirm` | `{xuid, gamertag?}` | 同上 + `justIssued`；pending→active 的签发点，幂等 |
 | `POST /hooks/verify` | `{name, value, signature}`（Java 玩家的 textures property 原样回传） | `{ok:true, profileId}` 或 `{ok:false, reason}` —— 站点用 RSA 私钥对应的公钥验签并核对身份 |
+| `POST /hooks/skin` | `{xuid}` 或 `{profileId}` | `{bound:true, profileId, profileName, textures:{name,value,signature}}` —— 签名 textures property（皮肤/披风 URL），伴生插件据此经 Geyser 通道覆盖基岩客户端自带皮肤；无绑定回 `{bound:false}` |
 
 进服门控建议：Floodgate 玩家 `lookup/confirm` 不为 active 就踢回（消息带其实测 XUID 与站点地址）；
 Java 玩家 `verify` 不过就踢回（离线模式下这就是「仅限外置登录玩家」的实现方式）。
@@ -69,7 +70,8 @@ Java 玩家 `verify` 不过就踢回（离线模式下这就是「仅限外置�
 
 1. 后端启用插件系统：`MCSTS_PLUGINS=1`（重启后端）。
 2. 面板 → 插件管理 → 从 GitHub 导入：粘仓库地址（任何形态都行），**子目录填 `site`**，
-   版本由导入器扫 tag 自动挑最新语义化版本，无需手选。
+   版本由导入器扫 tag 自动挑最新语义化版本，无需手选。直连 GitHub 不畅的部署由运维
+   配 `MCSTS_PLUGIN_MIRROR`（https 前缀，同时转发 API 与 raw 两个域名）。
 3. 启用 → 设置：`JOIN_ADDRESS`（基岩地址，展示给玩家）。
 4. 「服务器密钥」生成，把明文配进伴生插件；密钥轮换旧服侧立即失效。
 
