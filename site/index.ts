@@ -27,7 +27,23 @@ type Row = {
   gamertag: unknown;
   status: unknown;
   bound_at: unknown;
+  server: unknown;
 };
+
+/** 「名字=地址；名字=地址」——名字可省略；分号（含中文）与换行都是分隔符 */
+function parseServers(raw: string): { name: string; addr: string }[] {
+  return raw
+    .split(/[;；\n]/)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry !== '')
+    .map((entry) => {
+      const eq = entry.indexOf('=');
+      return eq > 0
+        ? { name: entry.slice(0, eq).trim(), addr: entry.slice(eq + 1).trim() }
+        : { name: '', addr: entry };
+    })
+    .filter((s) => s.addr !== '');
+}
 
 const setup: PluginSetup = async (ctx: PluginContext) => {
   const table = ctx.table('bindings');
@@ -41,9 +57,19 @@ const setup: PluginSetup = async (ctx: PluginContext) => {
        user_id      TEXT NOT NULL,
        gamertag     TEXT,
        status       TEXT NOT NULL,
-       bound_at     TEXT NOT NULL
+       bound_at     TEXT NOT NULL,
+       server       TEXT
      )`,
   );
+  // v2.3.0 多互通服：老库补 server 列（签发时记录观测到该 XUID 的服务器名）
+  if (ctx.db.dialect === 'postgres') {
+    await ctx.db.exec(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS server TEXT`);
+  } else {
+    const cols = await ctx.db.query<{ name: string }>(`PRAGMA table_info(${table})`, []);
+    if (!cols.some((c) => String(c.name) === 'server')) {
+      await ctx.db.exec(`ALTER TABLE ${table} ADD COLUMN server TEXT`);
+    }
+  }
 
   const rowOut = (r: Row) => ({
     bound: true,
@@ -51,6 +77,7 @@ const setup: PluginSetup = async (ctx: PluginContext) => {
     profileId: String(r.profile_id),
     profileName: String(r.profile_name),
     gamertag: r.gamertag === null || r.gamertag === undefined ? null : String(r.gamertag),
+    server: r.server === null || r.server === undefined ? null : String(r.server),
   });
 
   // ---- 生命周期跟随：绑定存角色 UUID，名字只是展示副本 ----
@@ -78,10 +105,13 @@ const setup: PluginSetup = async (ctx: PluginContext) => {
   ctx.binding({
     async list(actor: PluginBindingActor) {
       const rows = await ctx.db.query<Row>(
-        `SELECT xuid, profile_id, profile_name, gamertag, status, bound_at FROM ${table} WHERE profile_id = ${ph(0)}`,
+        `SELECT xuid, profile_id, profile_name, gamertag, status, bound_at, server FROM ${table} WHERE profile_id = ${ph(0)}`,
         [actor.profileId],
       );
-      const joinAddress = String((await ctx.settings.get('JOIN_ADDRESS')) ?? '').trim();
+      const serversRaw = String((await ctx.settings.get('SERVERS')) ?? '').trim();
+      // 兼容回落：v2.3.0 前只有 JOIN_ADDRESS 一个地址；SERVERS 没配时照旧生效
+      const legacy = String((await ctx.settings.get('JOIN_ADDRESS')) ?? '').trim();
+      const servers = serversRaw !== '' ? parseServers(serversRaw) : parseServers(legacy);
       const fields = (r: Row) => {
         const list = [
           { label: 'XUID', value: String(r.xuid) },
@@ -90,12 +120,17 @@ const setup: PluginSetup = async (ctx: PluginContext) => {
         if (r.gamertag !== null && r.gamertag !== undefined) {
           list.push({ label: '签发时昵称', value: String(r.gamertag) });
         }
+        if (r.server !== null && r.server !== undefined && String(r.server) !== '') {
+          list.push({ label: '签发于', value: String(r.server) });
+        }
         return list;
       };
+      const where =
+        servers.length > 0
+          ? `用基岩版加入以下任一服务器：${servers.map((s) => (s.name === '' ? s.addr : `${s.name}（${s.addr}）`)).join('、')}；`
+          : '';
       const claimHintText =
-        joinAddress !== ''
-          ? `用基岩版加入服务器 ${joinAddress}；被拦下的屏幕会显示你的 XUID，填入输入框提交申请，重新进服的那一刻签发。`
-          : '进服被拦时屏幕会显示你的 XUID，填入输入框提交申请，重新进服的那一刻签发。';
+        `${where}被拦下的屏幕会显示你的 XUID，填入输入框提交申请，重新进服的那一刻签发。`;
       return {
         bindings: rows.map((r) => ({
           id: String(r.xuid),
@@ -165,7 +200,7 @@ const setup: PluginSetup = async (ctx: PluginContext) => {
       return;
     }
     const rows = await ctx.db.query<Row>(
-      `SELECT xuid, profile_id, profile_name, gamertag, status, bound_at FROM ${table} WHERE xuid = ${ph(0)}`,
+      `SELECT xuid, profile_id, profile_name, gamertag, status, bound_at, server FROM ${table} WHERE xuid = ${ph(0)}`,
       [xuid],
     );
     const row = rows[0];
@@ -176,16 +211,17 @@ const setup: PluginSetup = async (ctx: PluginContext) => {
     res.json(rowOut(row));
   });
 
-  // 进服观测 = 持有证明：pending 在这里翻成 active，并记录实测昵称
+  // 进服观测 = 持有证明：pending 在这里翻成 active，并记录实测昵称与观测到它的服务器名
   ctx.hook({ method: 'POST', path: '/confirm', auth: 'hmac' }, async (req, res) => {
     const xuid = String(req.body['xuid'] ?? '').trim();
     const gamertag = String(req.body['gamertag'] ?? '').trim();
+    const server = String(req.body['server'] ?? '').trim().slice(0, 64);
     if (!XUID_PATTERN.test(xuid)) {
       res.status(400).json({ error: 'VALIDATION_ERROR', message: 'xuid 必须是一串十进制数字' });
       return;
     }
     const rows = await ctx.db.query<Row>(
-      `SELECT xuid, profile_id, profile_name, gamertag, status, bound_at FROM ${table} WHERE xuid = ${ph(0)}`,
+      `SELECT xuid, profile_id, profile_name, gamertag, status, bound_at, server FROM ${table} WHERE xuid = ${ph(0)}`,
       [xuid],
     );
     const row = rows[0];
@@ -195,16 +231,20 @@ const setup: PluginSetup = async (ctx: PluginContext) => {
     }
     if (String(row.status) === 'pending') {
       await ctx.db.run(
-        `UPDATE ${table} SET status = 'active', gamertag = ${ph(0)}, bound_at = ${ph(1)} WHERE xuid = ${ph(2)} AND status = 'pending'`,
-        [gamertag, new Date().toISOString(), xuid],
+        `UPDATE ${table} SET status = 'active', gamertag = ${ph(0)}, server = ${ph(1)}, bound_at = ${ph(2)} WHERE xuid = ${ph(3)} AND status = 'pending'`,
+        [gamertag, server, new Date().toISOString(), xuid],
       );
-      ctx.logger.info('进服观测，签证签发', { xuid, profileId: String(row.profile_id), gamertag });
+      ctx.logger.info('进服观测，签证签发', { xuid, profileId: String(row.profile_id), gamertag, server });
       const fresh = await ctx.db.query<Row>(
-        `SELECT xuid, profile_id, profile_name, gamertag, status, bound_at FROM ${table} WHERE xuid = ${ph(0)}`,
+        `SELECT xuid, profile_id, profile_name, gamertag, status, bound_at, server FROM ${table} WHERE xuid = ${ph(0)}`,
         [xuid],
       );
       res.json({ ...rowOut(fresh[0] ?? row), justIssued: true });
       return;
+    }
+    // 已生效但老记录没存过服务器名：补记一次，让「在哪台服的持有证明」可追溯
+    if (server !== '' && (row.server === null || row.server === undefined || row.server === '')) {
+      await ctx.db.run(`UPDATE ${table} SET server = ${ph(0)} WHERE xuid = ${ph(1)} AND (server IS NULL OR server = '')`, [server, xuid]);
     }
     res.json({ ...rowOut(row), justIssued: false });
   });
@@ -281,7 +321,7 @@ const setup: PluginSetup = async (ctx: PluginContext) => {
       return;
     }
     const rows = await ctx.db.query<Row>(
-      `SELECT xuid, profile_id, profile_name, gamertag, status, bound_at FROM ${table} WHERE xuid = ${ph(0)}`,
+      `SELECT xuid, profile_id, profile_name, gamertag, status, bound_at, server FROM ${table} WHERE xuid = ${ph(0)}`,
       [xuid],
     );
     const row = rows[0];

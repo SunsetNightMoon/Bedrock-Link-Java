@@ -1,7 +1,7 @@
 {
   "id": "bedrock_link",
   "name": "基岩版身份绑定",
-  "version": "2.2.2",
+  "version": "2.3.0",
   "apiVersion": 1,
   "mcsts": ">=2-26.4.2",
   "main": "index.ts",
@@ -30,10 +30,18 @@
   ],
   "settings": [
     {
+      "key": "SERVERS",
+      "type": "string",
+      "label": "互通服列表（展示给玩家）",
+      "hint": "多服用 ; 分隔，每项「名字=基岩地址」，名字可省略；绑定页逐条展示。如：主服=bedrock1.example.com:19132；二服=bedrock2.example.com:19132",
+      "default": ""
+    },
+    {
       "key": "JOIN_ADDRESS",
       "type": "string",
-      "label": "基岩服务器地址（展示给玩家）",
-      "hint": "如 bedrock.example.com:19132；绑定页会显示「用基岩版加入服务器 <地址>」"
+      "label": "基岩服务器地址（旧版单地址，兼容保留）",
+      "hint": "已废弃：SERVERS 填了就以 SERVERS 为准；此项仅在 SERVERS 为空时作为唯一地址展示",
+      "default": ""
     }
   ],
   "endpoints": [
@@ -50,7 +58,7 @@
       "method": "POST",
       "path": "/confirm",
       "auth": "hmac",
-      "note": "伴生插件实测到该 XUID 进服 → 把待确认申请签发为生效并记录昵称（幂等）",
+      "note": "伴生插件实测到该 XUID 进服 → 把待确认申请签发为生效并记录昵称与服务器名（幂等）",
       "rateLimit": { "max": 60, "windowMs": 60000 }
     },
     {

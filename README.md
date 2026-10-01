@@ -19,7 +19,8 @@ GitHub Release 上；仓库根只留说明与识别代号标记 `.mcsts-plugin/`
 
 | 实际可用 | 要求 / 搭档 |
 |---|---|
-| 站点插件 `v2.2.2`（当前；`v2.2.1`→`v2.2.2` 仅修元数据与文档，代码相同） | MCSTS ≥ P6 第七批（`binding.issue:false` 与 `profile.reserved`，目前仅在 Dev）；搭档 jar `server-v0.1.28`。自 v2.2.1 起插件住在 `site/` 子目录 |
+| 站点插件 `v2.3.0`（当前） | MCSTS ≥ v2-26.4.2（第七批契约）；多互通服：`SERVERS` 列表 + 签发记录观测服务器（老库自动补列）；搭档 jar `server-v0.1.29` |
+| 站点插件 `v2.2.1`/`v2.2.2` | 同代码两版（v2.2.2 仅元数据订正）；MCSTS ≥ P6 第七批（v2-26.4.2 起在 master）；搭档 jar `server-v0.1.28`。插件自 v2.2.1 起住在 `site/` 子目录 |
 | 站点插件 `v2.2.0` | 同 v2.2.1，但为**仓库根目录布局**——MCSTS 第八批自动识别导入会扫到 `server/` 的 jar 而拒装，只能手工放目录装 |
 | 站点插件 `v2.0.0` ~ `v2.1.1` | MCSTS ≥ P6 第五批（v2-26.4.1 / master 即可）；自带一次性码链路（`BIND_MODE`），搭档 jar `server-v0.1.27`；同为根目录布局，自动导入同样装不了 |
 | 伴生 jar `server-v0.1.28`（当前） | 配站点插件 ≥ v2.2.0：码制退役，`/bedrock link` 子命令移除 |
@@ -40,7 +41,10 @@ MCSTS 导入器只认**语义化 tag**（`v*`）并自动挑最新，`server-v*`
 **玩家动线（零命令）**：进服被拦 → 屏幕显示你的 XUID → 到站点粘贴提交（状态「待确认」）→
 重新进服 → 伴生插件观测到你、调 `/hooks/confirm` → 站点当场签发（记录昵称）→ 放行。
 
-签发后绑定行显示「XUID · 角色 · 签发时昵称」——昵称对不上说明被人抢注了申请，本人可自助解绑重申。
+签发后绑定行显示「XUID · 角色 · 签发时昵称 · 签发于哪个服」——昵称对不上说明被人抢注了申请，本人可自助解绑重申。
+**多互通服**：签证是站点级、跨服全局的——任何配了同一服务器密钥的互通服观测到该 XUID 都放行；
+一次在任何服上签发，所有服即刻生效。设置里的 `SERVERS` 列表只决定绑定页展示哪些加入地址，
+`server` 名（jar 的 `server-name` 配置）只用于签发来源的记录与展示。
 v2.2.0 起一次性码模式（旧 `BIND_MODE=code`）已移除：XUID 申请制覆盖同一件事，且「持有」一环
 由微软背书的实测 XUID 承担，比码更强；页面也因此收起了「生成绑定码」按钮。
 角色被换下（多→单切换、单模式换 ID）或账号注销时，插件收到核心事件后**丢弃该角色的绑定**，
@@ -59,7 +63,7 @@ X-MCSTS-Timestamp / X-MCSTS-Nonce / X-MCSTS-Signature
 | 端点 | 请求 | 响应 |
 |---|---|---|
 | `POST /hooks/lookup` | `{xuid}` | `{bound:true, status:'active', profileId, profileName, gamertag}` / `{bound:true,status:'pending',…}` / `{bound:false,pending:false}` |
-| `POST /hooks/confirm` | `{xuid, gamertag?}` | 同上 + `justIssued`；pending→active 的签发点，幂等 |
+| `POST /hooks/confirm` | `{xuid, gamertag?, server?}` | 同上 + `justIssued`；pending→active 的签发点，记录昵称与观测服务器名，幂等 |
 | `POST /hooks/verify` | `{name, value, signature}`（Java 玩家的 textures property 原样回传） | `{ok:true, profileId}` 或 `{ok:false, reason}` —— 站点用 RSA 私钥对应的公钥验签并核对身份 |
 | `POST /hooks/skin` | `{xuid}` 或 `{profileId}` | `{bound:true, profileId, profileName, textures:{name,value,signature}}` —— 签名 textures property（皮肤/披风 URL），伴生插件据此经 Geyser 通道覆盖基岩客户端自带皮肤；无绑定回 `{bound:false}` |
 
@@ -73,7 +77,8 @@ Java 玩家 `verify` 不过就踢回（离线模式下这就是「仅限外置�
    最新语义化版本；**子目录**在 MCSTS ≥ v2-26.4.2 之后的 Dev 上会随唯一 manifest 自动识别、
    可留空，v2-26.4.2 正式版仍需手填 `site`。直连 GitHub 不畅的部署由运维
    配 `MCSTS_PLUGIN_MIRROR`（https 前缀，同时转发 API 与 raw 两个域名）。
-3. 启用 → 设置：`JOIN_ADDRESS`（基岩地址，展示给玩家）。
+3. 启用 → 设置：`SERVERS`（互通服列表，多服用 `;` 分隔，每项「名字=基岩地址」；旧版单地址
+   `JOIN_ADDRESS` 仍兼容，`SERVERS` 为空时回落）。
 4. 「服务器密钥」生成，把明文配进伴生插件；密钥轮换旧服侧立即失效。
 
 ## 边界（请如实理解）
