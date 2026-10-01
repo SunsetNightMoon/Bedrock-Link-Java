@@ -1,13 +1,13 @@
 name: BedrockLink
-version: 0.1.27
+version: 0.1.28
 main: top.catnight.bedrocklink.BedrockLinkPlugin
 api-version: '26.2'
 depend: [Geyser-Spigot, floodgate]
 description: MCSkinToServer bedrock_link 的服务器侧伴生插件：签证门控、身份链接与 Java 验签。
 commands:
   bedrock:
-    description: 基岩签证：/bedrock xuid | /bedrock link <码> | /bedrock reload
-    usage: /bedrock <xuid|link|reload>
+    description: 基岩签证：/bedrock xuid | /bedrock reload
+    usage: /bedrock <xuid|reload>
     permission: bedrocklink.use
 permissions:
   bedrocklink.use:
