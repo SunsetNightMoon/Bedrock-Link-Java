@@ -245,6 +245,7 @@ const setup: PluginSetup = async (ctx: PluginContext) => {
     // 已生效但老记录没存过服务器名：补记一次，让「在哪台服的持有证明」可追溯
     if (server !== '' && (row.server === null || row.server === undefined || row.server === '')) {
       await ctx.db.run(`UPDATE ${table} SET server = ${ph(0)} WHERE xuid = ${ph(1)} AND (server IS NULL OR server = '')`, [server, xuid]);
+      row.server = server; // 响应要反映补记后的状态，而不是补记前读到的旧行
     }
     res.json({ ...rowOut(row), justIssued: false });
   });
