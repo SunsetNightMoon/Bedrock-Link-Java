@@ -1,0 +1,16 @@
+# 站点地址：不带结尾斜杠，如 https://skin.catnight.top
+site-url: "http://127.0.0.1:3010"
+# 展示给玩家的站点地址（踢回提示里用）：一般填前端页面地址，如 https://skin.catnight.top 或 http://192.168.x.x:5174。
+# 留空则回落到 site-url —— 两者不同时务必分开配：site-url 是服务器回调 API 的，这个是玩家打开网页的。
+site-display-url: ""
+# 面板「插件管理 → bedrock_link → 服务器密钥」生成的明文（只显示一次，配错了重新生成）
+hook-key: ""
+# 基岩侧：没有生效签证就不放行
+require-binding: true
+# 进服时自动把签证角色写进 Floodgate 链接记录（需要 floodgate 配置 player-link.enabled: true）
+link-identity: true
+# Java 侧：离线模式下强制「只有外置登录（站点签名）的玩家能进」
+verify-java: true
+# 签证玩家进服后把绑定角色的站点皮肤推给基岩客户端（覆盖其自带皮肤）；
+# 披风在基岩客户端不显示（客户端限制），Java 侧玩家看该玩家仍是站点全套纹理
+skin-push: true
