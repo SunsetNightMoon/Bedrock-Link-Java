@@ -187,6 +187,7 @@ public final class SkinPush implements Listener {
     }
 
     /** 所有在线 Java 玩家：按 profileId 问站点拿皮肤，推给每个在线基岩连接 */
+    /** 所有在线站点玩家（Java 与基岩都算）：取皮肤推给每个基岩观众连接 */
     private void syncJavaSkins() {
         try {
             java.util.List<Player> bedrockViewers = new java.util.ArrayList<>();
@@ -196,17 +197,21 @@ public final class SkinPush implements Listener {
             if (bedrockViewers.isEmpty()) return;
             for (Player p : Bukkit.getOnlinePlayers()) {
                 java.util.UUID u = p.getUniqueId();
-                if (FloodgateApi.getInstance().isFloodgatePlayer(u)) continue;
+                // v0.1.30：基岩主体不再跳过——门控给基岩玩家挂了 textures property 后，
+                // Geyser 对他就走「按 URL 直拉」而**从不触发** SessionSkinApplyEvent（#4 真机 0 次实证），
+                // 于是基岩↔基岩观众两头落空。与 Java 站点玩家同路：我们主动推给每个基岩连接。
                 Cached c = fetchCached(u);
                 if (c == null) continue;
                 SkinData data = new SkinData(new Skin(skinId(c.png(), c.slim()), rawPixels(c)), capeOf(c),
                         c.slim() ? org.geysermc.geyser.api.skin.SkinGeometry.SLIM
                                 : org.geysermc.geyser.api.skin.SkinGeometry.WIDE);
+                int sent = 0;
                 for (Player v : bedrockViewers) {
+                    if (v.getUniqueId().equals(u)) continue; // 自己那路由 push()/trusted 包负责
                     GeyserConnection conn = GeyserApi.api().connectionByUuid(v.getUniqueId());
-                    if (conn != null) conn.sendSkin(u, data);
+                    if (conn != null) { conn.sendSkin(u, data); sent++; }
                 }
-                log.info("已把 Java 站点玩家 " + p.getName() + " 的皮肤推给 " + bedrockViewers.size() + " 个基岩连接");
+                log.info("已把站点玩家 " + p.getName() + " 的皮肤推给 " + sent + " 个基岩观众");
             }
         } catch (Exception err) {
             log.warning("syncJavaSkins 失败（不影响其他链路）：" + err.getMessage());
