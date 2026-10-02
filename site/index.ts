@@ -114,7 +114,7 @@ const setup: PluginSetup = async (ctx: PluginContext) => {
       const servers = serversRaw !== '' ? parseServers(serversRaw) : parseServers(legacy);
       const fields = (r: Row) => {
         const list = [
-          { label: 'XUID', value: String(r.xuid) },
+          { label: 'XUID', value: String(r.xuid), secret: true },
           { label: '角色', value: String(r.profile_name) },
         ];
         if (r.gamertag !== null && r.gamertag !== undefined) {
