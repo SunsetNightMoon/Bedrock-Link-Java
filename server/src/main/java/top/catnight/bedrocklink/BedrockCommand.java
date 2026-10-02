@@ -32,6 +32,7 @@ public final class BedrockCommand implements CommandExecutor {
         }
         if (args.length >= 2 && args[0].equalsIgnoreCase("prop")) {
             // 取证：转某个在线玩家当前 GameProfile 里 textures 的真实内容（服务器到底往外发什么）
+            if (!LoginGate.PAPER) { sender.sendMessage("prop 取证读的是 Paper 的 GameProfile API，Spigot 上不可用"); return true; }
             Player target = org.bukkit.Bukkit.getPlayerExact(args[1]);
             if (target == null) { sender.sendMessage("玩家不在线：" + args[1]); return true; }
             com.destroystokyo.paper.profile.PlayerProfile pp = target.getPlayerProfile();
