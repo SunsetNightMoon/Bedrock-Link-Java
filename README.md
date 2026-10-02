@@ -32,6 +32,23 @@ MCSkinToServer 官方插件 **bedrock_link（基岩版身份绑定）的服务�
 4. 站点必须对本服务器可达；**站点不可达时一律拒绝放行**（fail-closed）——
    签证体系的前提是「进服瞬间的持有证明」由站点记录，宁可短暂拦人，不可放进伪造身份。
 
+## 平台兼容
+
+BedrockLink 是**服务器端插件**——必须与 Geyser/Floodgate 装在同一台 Java 服务器上：
+
+| 平台 | 状态 | 说明 |
+|---|---|---|
+| Paper | **主线支持（完整功能）** | 26.2 build 129 真机回归（#3/#4）：预登录纹理挂载、预登录验签、`prop` 取证全可用 |
+| Spigot | **主线支持（降级）** | v0.1.31 起运行时探测：挂载 Java 侧纹理与 `prop` 是 Paper 独有 API，Spigot 上跳过；`verify-java` 改在**进服后**反射核验、不过即踢（闸门不漏人，只是体验从「登录页文案」变「进服即踢」）。基岩侧门控/五路皮肤推送/监视器不受影响。**API 级兼容，尚未在 Spigot 真机回归** |
+| BungeeCord | 没有计划 | 代理端形态见 Velocity 条 |
+| Fabric（Geyser-Fabric） | 没有计划 | 无 Bukkit 事件面可挂 |
+| NeoForge | 没有计划 | 同上 |
+| Standalone（Geyser 独立运行，无 Java 服务器） | 没有计划 | 没有 Bukkit 宿主，插件无处安放 |
+| Velocity | 不支持 | 登录链在代理侧，服务器端插件够不着；Floodgate 代理模式的 XUID 由代理签发，与「本站服务器实测」的门控前提冲突 |
+| ViaProxy | 不支持 | 同上，且无签证体系挂点 |
+
+版本要求：Java 21+（编译 `--release 21`；实测运行 Java 25）、Geyser-Spigot 2.11.3+、Floodgate 2.2.5+。
+
 ## 边界与已知限制
 
 - **皮肤接管已实现**（`skin-push: true`，v0.1.26）：站点纹理经 `/hooks/skin` 取回，五路推送
@@ -51,7 +68,7 @@ javac --release 21 -encoding UTF-8 -nowarn \
   -cp "paper-api.jar;Geyser-Spigot.jar;floodgate-spigot.jar;gson.jar;adventure-api.jar;adventure-key.jar;annotations.jar;bungeecord-chat.jar" \
   -d out/classes $(find src/main/java -name '*.java')
 cp -r src/main/resources/* out/classes/
-jar -cf dist/BedrockLink-0.1.30.jar -C out/classes .
+jar -cf dist/BedrockLink-0.1.31.jar -C out/classes .
 ```
 
 依赖版本与 `pom.xml` 一致（Paper 26.2 build 129 / Geyser api 2.11.3-SNAPSHOT /

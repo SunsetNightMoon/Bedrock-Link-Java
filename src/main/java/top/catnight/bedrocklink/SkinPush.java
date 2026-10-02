@@ -104,7 +104,7 @@ public final class SkinPush implements Listener {
         Player p = ch.player();
         java.util.UUID u = p.getUniqueId();
         Cached c = ch.c();
-        if (ch.bedrock() && c.value() != null && c.signature() != null) {
+        if (ch.bedrock() && LoginGate.PAPER && c.value() != null && c.signature() != null) {
             // Java 观众：换档案 + hide/show 强制按新 blob URL 重取（绕开注入器旧缓存）
             com.destroystokyo.paper.profile.PlayerProfile pp = p.getPlayerProfile();
             pp.setProperty(new com.destroystokyo.paper.profile.ProfileProperty(

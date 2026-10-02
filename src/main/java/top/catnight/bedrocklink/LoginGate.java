@@ -23,8 +23,25 @@ public final class LoginGate implements Listener {
     public static final String CONFIRM = "/api/plugins/bedrock_link/hooks/confirm";
     public static final String VERIFY = "/api/plugins/bedrock_link/hooks/verify";
 
+    /**
+     * 运行时平台探测：登录期读/写 GameProfile（挂载站点纹理、预登录验签）是 Paper 独有 API，
+     * Spigot 上调用直接 NoSuchMethodError。Spigot 走降级路径：纹理挂载跳过（Java 观众看不到
+     * 基岩玩家的站点皮肤，基岩侧五路推送不受影响），verify-java 改在进服后反射核验、不过即踢。
+     */
+    public static final boolean PAPER = probePaper();
+
+    private static boolean probePaper() {
+        try {
+            AsyncPlayerPreLoginEvent.class.getMethod("getPlayerProfile");
+            return true;
+        } catch (Throwable err) {
+            return false;
+        }
+    }
+
     private final BedrockLinkPlugin plugin;
     private final Logger log;
+    private boolean spigotNoticeLogged;
 
     public LoginGate(BedrockLinkPlugin plugin) {
         this.plugin = plugin;
@@ -36,9 +53,83 @@ public final class LoginGate implements Listener {
         if (FloodgateApi.getInstance().isFloodgatePlayer(e.getUniqueId())) {
             gateBedrock(e);
         } else if (plugin.settings().verifyJava()) {
-            gateJava(e);
+            if (PAPER) {
+                gateJava(e);
+            } else {
+                noticeSpigot();
+                // Spigot 预登录拿不到 profile：验签挪到进服后（onJoinVerify），这里放行
+            }
         }
     }
+
+    private void noticeSpigot() {
+        if (spigotNoticeLogged) return;
+        spigotNoticeLogged = true;
+        log.info("检测到 Spigot（非 Paper）：纹理挂载与预登录验签降级 —— verify-java 改在进服后核验，"
+                + "Java 观众看不到站点皮肤（基岩侧皮肤/披风推送不受影响）。需要完整功能请换 Paper。");
+    }
+
+    /** Spigot 降级路径：进服后反射读 textures property 验签，不过即踢（进服即踢，体验略糙但闸门不漏人） */
+    @EventHandler
+    public void onJoinVerify(org.bukkit.event.player.PlayerJoinEvent e) {
+        if (PAPER || !plugin.settings().verifyJava()) return;
+        org.bukkit.entity.Player p = e.getPlayer();
+        if (FloodgateApi.getInstance().isFloodgatePlayer(p.getUniqueId())) return;
+        String name = p.getName();
+        java.util.UUID uid = p.getUniqueId();
+        String[] tex = readTexturesViaReflection(p);
+        org.bukkit.Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            JsonObject req = new JsonObject();
+            req.addProperty("name", name);
+            if (tex == null) {
+                req.addProperty("value", "");
+                req.addProperty("signature", "");
+            } else {
+                req.addProperty("value", tex[0]);
+                req.addProperty("signature", tex[1]);
+            }
+            JsonObject r;
+            try {
+                r = plugin.site().post(VERIFY, req);
+            } catch (Exception err) {
+                kick(uid, "皮肤站暂时连不上，无法核验签证。");
+                return;
+            }
+            if (!(r.has("ok") && r.get("ok").getAsBoolean())) {
+                String reason = r.has("reason") ? r.get("reason").getAsString() : "unknown";
+                kick(uid, "签证核验未通过（" + reason + "）：请使用皮肤站外置登录进入本服。");
+            }
+        });
+    }
+
+    private void kick(java.util.UUID uid, String msg) {
+        org.bukkit.Bukkit.getScheduler().runTask(plugin, () -> {
+            org.bukkit.entity.Player p = plugin.getServer().getPlayer(uid);
+            if (p != null) p.kickPlayer(msg);
+        });
+    }
+
+    /** CraftPlayer.getProfile() 在 Spigot/Paper 都存在；authlib 类不硬依赖，全程反射 */
+    private static String[] readTexturesViaReflection(org.bukkit.entity.Player p) {
+        try {
+            Object profile = p.getClass().getMethod("getProfile").invoke(p);
+            Object map = profile.getClass().getMethod("getProperties").invoke(profile);
+            Object entries = map.getClass().getMethod("entries").invoke(map);
+            for (Object entryObj : (Iterable<?>) entries) {
+                Object key = entryObj.getClass().getMethod("getKey").invoke(entryObj);
+                if (!"textures".equals(String.valueOf(key))) continue;
+                Object prop = entryObj.getClass().getMethod("getValue").invoke(entryObj);
+                String value = (String) prop.getClass().getMethod("getValue").invoke(prop);
+                String sig = (String) prop.getClass().getMethod("getSignature").invoke(prop);
+                if (sig == null || sig.isEmpty()) return null;
+                return new String[]{value, sig};
+            }
+        } catch (Throwable err) {
+            return null;
+        }
+        return null;
+    }
+
 
     private void gateBedrock(AsyncPlayerPreLoginEvent e) {
         if (!plugin.settings().requireBinding()) return;
@@ -90,9 +181,9 @@ public final class LoginGate implements Listener {
         applyTextures(e, xuid);
     }
 
-    /** 把站点签名纹理挂进 Java GameProfile：Java 侧玩家即可看到该基岩玩家的站点皮肤与披风 */
+    /** 把站点签名纹理挂进 Java GameProfile：Java 侧玩家即可看到该基岩玩家的站点皮肤与披风（仅 Paper） */
     private void applyTextures(AsyncPlayerPreLoginEvent e, String xuid) {
-        if (!plugin.settings().skinPush()) return;
+        if (!plugin.settings().skinPush() || !PAPER) return;
         try {
             JsonObject body = new JsonObject();
             body.addProperty("xuid", xuid);
