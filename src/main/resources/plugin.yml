@@ -1,5 +1,5 @@
 name: BedrockLink
-version: 0.1.29
+version: 0.1.30
 main: top.catnight.bedrocklink.BedrockLinkPlugin
 api-version: '26.2'
 depend: [Geyser-Spigot, floodgate]
