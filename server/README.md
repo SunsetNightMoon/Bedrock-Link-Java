@@ -41,8 +41,7 @@ BedrockLink 是**服务器端插件**——必须与 Geyser/Floodgate 装在同�
 | Paper | **主线支持（完整功能）** | 26.2 build 129 真机回归（#3/#4）：预登录纹理挂载、预登录验签、`prop` 取证全可用 |
 | Spigot | **主线支持（降级）** | v0.1.31 起运行时探测：挂载 Java 侧纹理与 `prop` 是 Paper 独有 API，Spigot 上跳过；`verify-java` 改在**进服后**反射核验、不过即踢（闸门不漏人，只是体验从「登录页文案」变「进服即踢」）。基岩侧门控/五路皮肤推送/监视器不受影响。**API 级兼容，尚未在 Spigot 真机回归** |
 | BungeeCord | 没有计划 | 代理端形态见 Velocity 条 |
-| Fabric（Geyser-Fabric） | 没有计划 | 无 Bukkit 事件面可挂 |
-| NeoForge | 没有计划 | 同上 |
+| Fabric / NeoForge | **计划中** | GeyserMC 官方有 Geyser-Fabric 与 Geyser-NeoForge 分支（基岩玩家不经 Bukkit 代理直连模组服），本插件将随之移植为 mod 形态——门控、皮肤推送与 `/bedrock` 命令对齐 Bukkit 版能力 |
 | Standalone（Geyser 独立运行，无 Java 服务器） | 没有计划 | 没有 Bukkit 宿主，插件无处安放 |
 | Velocity | 不支持 | 登录链在代理侧，服务器端插件够不着；Floodgate 代理模式的 XUID 由代理签发，与「本站服务器实测」的门控前提冲突 |
 | ViaProxy | 不支持 | 同上，且无签证体系挂点 |
